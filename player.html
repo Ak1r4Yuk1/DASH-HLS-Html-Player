@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple HLS/DASH ClearKey Player</title>
+  <!-- Carica Shaka Player da CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.11.2/shaka-player.compiled.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      width: 100%;
+      max-width: 850px;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 16px;
+      background: #1e1e1e;
+      padding: 16px;
+      border-radius: 8px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+    input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #333;
+      background: #2a2a2a;
+      color: #fff;
+      font-size: 14px;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      background: #3b82f6;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    video {
+      width: 100%;
+      background: #000;
+      border-radius: 8px;
+      aspect-ratio: 16 / 9;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #a0a0a0;
+    }
+    .error { color: #ef4444 !important; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="controls">
+    <input type="text" id="streamUrl" placeholder="URL del manifest (.mpd o .m3u8)">
+    <div class="row">
+      <input type="text" id="clearkey" placeholder="KID:KEY in esadecimale (opzionale - es. 1a2b3c...:4d5e6f...)">
+      <button onclick="loadStream()">Riproduci</button>
+    </div>
+  </div>
+
+  <video id="video" controls autoplay></video>
+  <div id="status">Pronto. Inserisci un URL e premi Riproduci.</div>
+</div>
+
+<script>
+  let player;
+
+  // Inizializza Shaka Player al caricamento della pagina
+  document.addEventListener('DOMContentLoaded', () => {
+    shaka.polyfill.installAll();
+    if (shaka.Player.isBrowserSupported()) {
+      const video = document.getElementById('video');
+      player = new shaka.Player();
+      player.attach(video);
+
+      player.addEventListener('error', (event) => {
+        setStatus('Errore Shaka: ' + event.detail.code + ' - ' + event.detail.message, true);
+      });
+    } else {
+      setStatus('Browser non supportato da Shaka Player.', true);
+    }
+  });
+
+  function setStatus(msg, isError = false) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = isError ? 'error' : '';
+  }
+
+  async function loadStream() {
+    const url = document.getElementById('streamUrl').value.trim();
+    const clearKeyInput = document.getElementById('clearkey').value.trim();
+
+    if (!url) {
+      setStatus('Inserisci un URL valido.', true);
+      return;
+    }
+
+    // Resetta configurazioni precedenti
+    player.resetConfiguration();
+
+    // Configura ClearKey se presente
+    if (clearKeyInput) {
+      const parts = clearKeyInput.split(':');
+      if (parts.length === 2 && parts[0].length === 32 && parts[1].length === 32) {
+        const kid = parts[0].toLowerCase();
+        const key = parts[1].toLowerCase();
+        
+        player.configure({
+          drm: {
+            clearKeys: {
+              [kid]: key
+            }
+          }
+        });
+      } else {
+        setStatus('Formato KID:KEY non valido. Devono essere due stringhe esadecimali da 32 caratteri separate da ":"', true);
+        return;
+      }
+    }
+
+    setStatus('Caricamento stream in corso...');
+    try {
+      await player.load(url);
+      setStatus('Riproduzione avviata.');
+    } catch (e) {
+      setStatus('Impossibile caricare lo stream (controlla CORS, URL o chiavi). Codice: ' + e.code, true);
+      console.error(e);
+    }
+  }
+</script>
+
+</body>
+</html>
